@@ -1,3 +1,4 @@
+import { CHANNEL_IDS } from "../channels/registry.js";
 import type { OpenClawConfig } from "../config/config.js";
 
 const DEFAULT_PRIMARY_MODEL = "openai/gpt-5.2";
@@ -85,8 +86,55 @@ const ALLOWED_PROVIDER_IDS = new Set([
   "gemini",
 ]);
 
+type PluginEntryLike = {
+  enabled?: unknown;
+  config?: unknown;
+};
+
+const CORE_CHANNEL_PLUGIN_IDS = new Set<string>(CHANNEL_IDS);
+
 function normalizeProviderId(providerId: string): string {
   return providerId.trim().toLowerCase();
+}
+
+function normalizePluginId(pluginId: string): string {
+  return pluginId.trim();
+}
+
+function hasConfigObject(value: unknown): boolean {
+  return typeof value === "object" && value !== null && Object.keys(value).length > 0;
+}
+
+function collectRequiredPluginIds(cfg: OpenClawConfig): string[] {
+  const required = new Set<string>(["whatsapp"]);
+  const memorySlot = cfg.plugins?.slots?.memory;
+  if (typeof memorySlot === "string") {
+    const normalizedMemorySlot = normalizePluginId(memorySlot);
+    if (normalizedMemorySlot && normalizedMemorySlot !== "none") {
+      required.add(normalizedMemorySlot);
+    }
+  }
+
+  for (const [pluginId, entry] of Object.entries(cfg.plugins?.entries ?? {})) {
+    const normalizedPluginId = normalizePluginId(pluginId);
+    if (!normalizedPluginId) {
+      continue;
+    }
+    if (normalizedPluginId !== "whatsapp" && CORE_CHANNEL_PLUGIN_IDS.has(normalizedPluginId)) {
+      continue;
+    }
+    const pluginEntry = (entry ?? {}) as PluginEntryLike;
+    if (pluginEntry.enabled === true || hasConfigObject(pluginEntry.config)) {
+      required.add(normalizedPluginId);
+    }
+  }
+
+  return [
+    "whatsapp",
+    ...Array.from(required)
+      .filter((pluginId) => pluginId !== "whatsapp")
+      .toSorted((a, b) => a.localeCompare(b)),
+  ];
 }
 
 function resolveProviderIdFromModelRef(modelRef: string): string | null {
@@ -150,6 +198,20 @@ export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfi
         !enforceProviderAllowlist || ALLOWED_PROVIDER_IDS.has(normalizeProviderId(providerId)),
     ),
   );
+
+  const requiredPluginIds = collectRequiredPluginIds(cfg);
+  const requiredPluginSet = new Set(requiredPluginIds);
+  const filteredPluginEntries = Object.fromEntries(
+    Object.entries(cfg.plugins?.entries ?? {}).filter(([pluginId]) =>
+      requiredPluginSet.has(normalizePluginId(pluginId)),
+    ),
+  );
+  const filteredPluginDeny = Array.isArray(cfg.plugins?.deny)
+    ? cfg.plugins.deny.filter(
+        (pluginId) =>
+          typeof pluginId === "string" && !requiredPluginSet.has(normalizePluginId(pluginId)),
+      )
+    : cfg.plugins?.deny;
 
   return {
     ...cfg,
@@ -239,6 +301,9 @@ export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfi
     plugins: {
       ...cfg.plugins,
       enabled: cfg.plugins?.enabled ?? true,
+      allow: requiredPluginIds,
+      entries: filteredPluginEntries,
+      ...(filteredPluginDeny !== undefined ? { deny: filteredPluginDeny } : {}),
     },
   };
 }

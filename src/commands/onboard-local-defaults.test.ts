@@ -148,4 +148,27 @@ describe("applyLocalOnboardingDefaults", () => {
     expect(next.models?.providers?.["qwen-portal"]).toBeDefined();
     expect(next.models?.providers?.xai).toBeDefined();
   });
+
+  it("keeps required plugins and removes non-essential plugin entries", () => {
+    const next = applyLocalOnboardingDefaults({
+      plugins: {
+        allow: ["telegram", "whatsapp", "memory-core"],
+        deny: ["whatsapp", "legacy-plugin"],
+        slots: { memory: "memory-core" },
+        entries: {
+          whatsapp: { enabled: true },
+          "memory-core": { config: { backend: "sqlite" } },
+          telegram: { enabled: true },
+          "legacy-plugin": { enabled: false },
+        },
+      },
+    });
+
+    expect(next.plugins?.allow).toEqual(["whatsapp", "memory-core"]);
+    expect(next.plugins?.deny).toEqual(["legacy-plugin"]);
+    expect(next.plugins?.entries?.whatsapp).toEqual({ enabled: true });
+    expect(next.plugins?.entries?.["memory-core"]).toEqual({ config: { backend: "sqlite" } });
+    expect(next.plugins?.entries?.telegram).toBeUndefined();
+    expect(next.plugins?.entries?.["legacy-plugin"]).toBeUndefined();
+  });
 });
