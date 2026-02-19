@@ -74,7 +74,41 @@ const DEFAULT_CUSTOM_PROVIDERS = {
   },
 } as const;
 
+const ALLOWED_PROVIDER_IDS = new Set([
+  "openai",
+  "deepseek",
+  "qwen-portal",
+  "qwen",
+  "xai",
+  "grok",
+  "google",
+  "gemini",
+]);
+
+function normalizeProviderId(providerId: string): string {
+  return providerId.trim().toLowerCase();
+}
+
+function resolveProviderIdFromModelRef(modelRef: string): string | null {
+  const slashIndex = modelRef.indexOf("/");
+  if (slashIndex <= 0) {
+    return null;
+  }
+  return normalizeProviderId(modelRef.slice(0, slashIndex));
+}
+
+function isAllowedModelRef(modelRef: string): boolean {
+  const providerId = resolveProviderIdFromModelRef(modelRef);
+  return providerId !== null && ALLOWED_PROVIDER_IDS.has(providerId);
+}
+
 export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfig {
+  const hasAuthProfiles = Object.keys(cfg.auth?.profiles ?? {}).length > 0;
+  const hasPrimaryModel =
+    typeof cfg.agents?.defaults?.model?.primary === "string" &&
+    cfg.agents?.defaults?.model?.primary.trim().length > 0;
+  const enforceProviderAllowlist = !hasAuthProfiles && !hasPrimaryModel;
+
   const whatsapp = {
     ...cfg.channels?.whatsapp,
     dmPolicy: cfg.channels?.whatsapp?.dmPolicy ?? "pairing",
@@ -83,6 +117,39 @@ export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfi
       "*": { requireMention: true },
     },
   };
+
+  const configuredPrimaryModel = cfg.agents?.defaults?.model?.primary;
+  const primaryModel =
+    typeof configuredPrimaryModel !== "string"
+      ? DEFAULT_PRIMARY_MODEL
+      : !enforceProviderAllowlist || isAllowedModelRef(configuredPrimaryModel)
+        ? configuredPrimaryModel
+        : DEFAULT_PRIMARY_MODEL;
+
+  const configuredFallbacks = cfg.agents?.defaults?.model?.fallbacks;
+  const fallbackCandidates = Array.isArray(configuredFallbacks)
+    ? configuredFallbacks
+    : [...DEFAULT_FALLBACK_MODELS];
+  const allowedFallbacks = fallbackCandidates.filter((modelRef): modelRef is string => {
+    if (typeof modelRef !== "string" || modelRef.trim().length === 0) {
+      return false;
+    }
+    return !enforceProviderAllowlist || isAllowedModelRef(modelRef);
+  });
+  const fallbackModels =
+    allowedFallbacks.length > 0 ? allowedFallbacks : [...DEFAULT_FALLBACK_MODELS];
+
+  const existingModelAliases = Object.entries(cfg.agents?.defaults?.models ?? {}).filter(
+    ([modelRef]) => !enforceProviderAllowlist || isAllowedModelRef(modelRef),
+  );
+  const filteredModelAliases = Object.fromEntries(existingModelAliases);
+
+  const filteredProviders = Object.fromEntries(
+    Object.entries(cfg.models?.providers ?? {}).filter(
+      ([providerId]) =>
+        !enforceProviderAllowlist || ALLOWED_PROVIDER_IDS.has(normalizeProviderId(providerId)),
+    ),
+  );
 
   return {
     ...cfg,
@@ -104,12 +171,12 @@ export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfi
         ...cfg.agents?.defaults,
         model: {
           ...cfg.agents?.defaults?.model,
-          primary: cfg.agents?.defaults?.model?.primary ?? DEFAULT_PRIMARY_MODEL,
-          fallbacks: cfg.agents?.defaults?.model?.fallbacks ?? [...DEFAULT_FALLBACK_MODELS],
+          primary: primaryModel,
+          fallbacks: fallbackModels,
         },
         models: {
           ...DEFAULT_MODEL_ALIASES,
-          ...cfg.agents?.defaults?.models,
+          ...filteredModelAliases,
         },
         thinkingDefault: cfg.agents?.defaults?.thinkingDefault ?? "high",
         timeoutSeconds: cfg.agents?.defaults?.timeoutSeconds ?? 1800,
@@ -128,7 +195,7 @@ export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfi
       ...cfg.models,
       providers: {
         ...DEFAULT_CUSTOM_PROVIDERS,
-        ...cfg.models?.providers,
+        ...filteredProviders,
       },
     },
     tools: {

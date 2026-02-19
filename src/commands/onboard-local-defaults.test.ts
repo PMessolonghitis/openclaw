@@ -111,4 +111,41 @@ describe("applyLocalOnboardingDefaults", () => {
     expect(next.channels?.telegram).toBeUndefined();
     expect(next.channels?.slack).toBeUndefined();
   });
+
+  it("enforces the model provider allowlist for local onboarding defaults", () => {
+    const next = applyLocalOnboardingDefaults({
+      agents: {
+        defaults: {
+          models: {
+            "anthropic/claude-3-7-sonnet": { alias: "claude" },
+            "openai/gpt-5-mini": { alias: "gpt-mini-custom" },
+          },
+        },
+      },
+      models: {
+        providers: {
+          anthropic: { apiKey: "ANTHROPIC_API_KEY" },
+          openai: { apiKey: "OPENAI_API_KEY" },
+          google: { apiKey: "GOOGLE_API_KEY" },
+        },
+      },
+    });
+
+    expect(next.agents?.defaults?.model?.primary).toBe("openai/gpt-5.2");
+    expect(next.agents?.defaults?.model?.fallbacks).toEqual([
+      "deepseek/deepseek-chat",
+      "qwen-portal/coder-model",
+      "xai/grok-4",
+      "google/gemini-3-pro-preview",
+    ]);
+    expect(next.agents?.defaults?.models?.["anthropic/claude-3-7-sonnet"]).toBeUndefined();
+    expect(next.agents?.defaults?.models?.["openai/gpt-5-mini"]?.alias).toBe("gpt-mini-custom");
+
+    expect(next.models?.providers?.anthropic).toBeUndefined();
+    expect(next.models?.providers?.openai?.apiKey).toBe("OPENAI_API_KEY");
+    expect(next.models?.providers?.google?.apiKey).toBe("GOOGLE_API_KEY");
+    expect(next.models?.providers?.deepseek).toBeDefined();
+    expect(next.models?.providers?.["qwen-portal"]).toBeDefined();
+    expect(next.models?.providers?.xai).toBeDefined();
+  });
 });
