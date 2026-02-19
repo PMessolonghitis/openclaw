@@ -282,8 +282,7 @@ export function applyLocalOnboardingDefaults(cfg: OpenClawConfig): OpenClawConfi
         ...cfg.tools?.web,
         search: {
           ...cfg.tools?.web?.search,
-          enabled: cfg.tools?.web?.search?.enabled ?? true,
-          provider: cfg.tools?.web?.search?.provider ?? "grok",
+          enabled: cfg.tools?.web?.search?.enabled ?? false,
           grok: {
             ...cfg.tools?.web?.search?.grok,
             model: cfg.tools?.web?.search?.grok?.model ?? "grok-4-1-fast",

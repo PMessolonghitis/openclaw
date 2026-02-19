@@ -20,7 +20,8 @@ describe("applyLocalOnboardingDefaults", () => {
 
     expect(next.tools?.profile).toBe("full");
     expect(next.tools?.agentToAgent?.enabled).toBe(true);
-    expect(next.tools?.web?.search?.provider).toBe("grok");
+    expect(next.tools?.web?.search?.enabled).toBe(false);
+    expect(next.tools?.web?.search?.provider).toBeUndefined();
     expect(next.tools?.web?.fetch?.maxChars).toBe(120000);
 
     expect(next.models?.providers?.deepseek?.apiKey).toBe("DEEPSEEK_API_KEY");
