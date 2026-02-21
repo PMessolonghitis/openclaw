@@ -13,6 +13,7 @@ import {
   resolveControlUiLinks,
   waitForGatewayReachable,
 } from "../onboard-helpers.js";
+import { applyLocalOnboardingDefaults } from "../onboard-local-defaults.js";
 import type { OnboardOptions } from "../onboard-types.js";
 import { inferAuthChoiceFromFlags } from "./local/auth-choice-inference.js";
 import { applyNonInteractiveAuthChoice } from "./local/auth-choice.js";
@@ -77,6 +78,7 @@ export async function runNonInteractiveOnboardingLocal(params: {
 
   nextConfig = applyNonInteractiveSkillsConfig({ nextConfig, opts, runtime });
 
+  nextConfig = applyLocalOnboardingDefaults(nextConfig);
   nextConfig = applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
   logConfigUpdated(runtime);

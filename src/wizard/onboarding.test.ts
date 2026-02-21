@@ -408,4 +408,51 @@ describe("runOnboardingWizard", () => {
       }
     }
   });
+
+  it("applies local onboarding defaults before writing config", async () => {
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.openclaw/openclaw.json",
+      exists: false,
+      raw: null,
+      parsed: { channels: { telegram: { enabled: true, botToken: "t" } } },
+      resolved: { channels: { telegram: { enabled: true, botToken: "t" } } },
+      valid: true,
+      config: { channels: { telegram: { enabled: true, botToken: "t" } } },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const prompter = createWizardPrompter();
+    const runtime = createRuntime();
+
+    await runOnboardingWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      runtime,
+      prompter,
+    );
+
+    const lastWriteCall = writeConfigFile.mock.calls.at(-1)?.[0] as
+      | {
+          channels?: {
+            whatsapp?: { dmPolicy?: string; groupPolicy?: string };
+            telegram?: unknown;
+          };
+          tools?: { web?: { search?: { enabled?: boolean } } };
+        }
+      | undefined;
+    expect(lastWriteCall?.channels?.whatsapp?.dmPolicy).toBe("pairing");
+    expect(lastWriteCall?.channels?.whatsapp?.groupPolicy).toBe("allowlist");
+    expect(lastWriteCall?.channels?.telegram).toBeUndefined();
+    expect(lastWriteCall?.tools?.web?.search?.enabled).toBe(false);
+  });
 });

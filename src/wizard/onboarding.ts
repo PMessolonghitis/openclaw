@@ -334,6 +334,7 @@ export async function runOnboardingWizard(
   const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
   const { applyOnboardingLocalWorkspaceConfig } = await import("../commands/onboard-config.js");
+  const { applyLocalOnboardingDefaults } = await import("../commands/onboard-local-defaults.js");
   let nextConfig: OpenClawConfig = applyOnboardingLocalWorkspaceConfig(baseConfig, workspaceDir);
 
   const { ensureAuthProfileStore } = await import("../agents/auth-profiles.js");
@@ -429,6 +430,7 @@ export async function runOnboardingWizard(
     });
   }
 
+  nextConfig = applyLocalOnboardingDefaults(nextConfig);
   await writeConfigFile(nextConfig);
   const { logConfigUpdated } = await import("../config/logging.js");
   logConfigUpdated(runtime);
@@ -447,6 +449,7 @@ export async function runOnboardingWizard(
   const { setupInternalHooks } = await import("../commands/onboard-hooks.js");
   nextConfig = await setupInternalHooks(nextConfig, runtime, prompter);
 
+  nextConfig = applyLocalOnboardingDefaults(nextConfig);
   nextConfig = onboardHelpers.applyWizardMetadata(nextConfig, { command: "onboard", mode });
   await writeConfigFile(nextConfig);
 
